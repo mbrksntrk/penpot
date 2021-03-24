@@ -14,6 +14,7 @@
    [app.common.spec :as us]
    [app.common.uuid :as uuid]
    [app.db :as db]
+   [app.metrics :as mtx]
    [app.util.async :as aa]
    [app.util.log4j :refer [update-thread-context!]]
    [app.util.time :as dt]
@@ -151,45 +152,6 @@
 (defmethod ig/halt-key! ::worker
   [_ instance]
   (.close ^java.lang.AutoCloseable instance))
-
-;; --- INSTRUMENTATION
-
-(defn- instrument!
-  [registry]
-  (mtx/instrument-vars!
-   [#'submit-task]
-   {:registry registry
-    :type :counter
-    :labels ["name"]
-    :name "tasks_submit_total"
-    :help "A counter of task submissions."
-    :wrap (fn [rootf mobj]
-            (let [mdata (meta rootf)
-                  origf (::original mdata rootf)]
-              (with-meta
-                (fn [conn params]
-                  (let [tname (:name params)]
-                    (mobj :inc [tname])
-                    (origf conn params)))
-                {::original origf})))})
-
-  (mtx/instrument-vars!
-   [#'app.worker/run-task]
-   {:registry registry
-    :type :summary
-    :quantiles []
-    :name "tasks_checkout_timing"
-    :help "Latency measured between scheduld_at and execution time."
-    :wrap (fn [rootf mobj]
-            (let [mdata (meta rootf)
-                  origf (::original mdata rootf)]
-              (with-meta
-                (fn [tasks item]
-                  (let [now (inst-ms (dt/now))
-                        sat (inst-ms (:scheduled-at item))]
-                    (mobj :observe (- now sat))
-                    (origf tasks item)))
-                {::original origf})))}))
 
 ;; --- SUBMIT
 
@@ -475,3 +437,43 @@
   [{:keys [scheduler] :as cfg} {:keys [cron] :as task}]
   (let [ms (ms-until-valid cron)]
     (px/schedule! scheduler ms (partial execute-scheduled-task cfg task))))
+
+;; --- INSTRUMENTATION
+
+(defn instrument!
+  [registry]
+  (mtx/instrument-vars!
+   [#'submit!]
+   {:registry registry
+    :type :counter
+    :labels ["name"]
+    :name "tasks_submit_total"
+    :help "A counter of task submissions."
+    :wrap (fn [rootf mobj]
+            (let [mdata (meta rootf)
+                  origf (::original mdata rootf)]
+              (with-meta
+                (fn [conn params]
+                  (let [tname (:name params)]
+                    (mobj :inc [tname])
+                    (origf conn params)))
+                {::original origf})))})
+
+  (mtx/instrument-vars!
+   [#'app.worker/run-task]
+   {:registry registry
+    :type :summary
+    :quantiles []
+    :name "tasks_checkout_timing"
+    :help "Latency measured between scheduld_at and execution time."
+    :wrap (fn [rootf mobj]
+            (let [mdata (meta rootf)
+                  origf (::original mdata rootf)]
+              (with-meta
+                (fn [tasks item]
+                  (let [now (inst-ms (dt/now))
+                        sat (inst-ms (:scheduled-at item))]
+                    (mobj :observe (- now sat))
+                    (origf tasks item)))
+                {::original origf})))}))
+

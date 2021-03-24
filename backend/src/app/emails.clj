@@ -5,7 +5,7 @@
 ;; This Source Code Form is "Incompatible With Secondary Licenses", as
 ;; defined by the Mozilla Public License, v. 2.0.
 ;;
-;; Copyright (c) 2020-2021 UXBOX Labs SL
+;; Copyright (c) UXBOX Labs SL
 
 (ns app.emails
   "Main api for send emails."
@@ -14,9 +14,8 @@
    [app.config :as cfg]
    [app.db :as db]
    [app.db.sql :as sql]
-   [app.worker :as wrk]
-   ;; [app.tasks :as tasks]
    [app.util.emails :as emails]
+   [app.worker :as wrk]
    [clojure.spec.alpha :as s]))
 
 ;; --- Defaults

@@ -5,7 +5,7 @@
 ;; This Source Code Form is "Incompatible With Secondary Licenses", as
 ;; defined by the Mozilla Public License, v. 2.0.
 ;;
-;; Copyright (c) 2020-2021 UXBOX Labs SL
+;; Copyright (c) UXBOX Labs SL
 
 (ns app.rpc.mutations.demo
   "A demo specific mutations."
@@ -16,9 +16,8 @@
    [app.db :as db]
    [app.rpc.mutations.profile :as profile]
    [app.setup.initial-data :as sid]
-   [app.worker :as wrk]
-   ;; [app.tasks :as tasks]
    [app.util.services :as sv]
+   [app.worker :as wrk]
    [buddy.core.codecs :as bc]
    [buddy.core.nonce :as bn]
    [clojure.spec.alpha :as s]))
