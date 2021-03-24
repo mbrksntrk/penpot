@@ -10,6 +10,7 @@
 (ns app.worker
   "Async tasks abstraction (impl)."
   (:require
+   [app.common.data :as d]
    [app.common.exceptions :as ex]
    [app.common.spec :as us]
    [app.common.uuid :as uuid]
@@ -73,7 +74,7 @@
 (declare event-loop-fn)
 (declare instrument-tasks)
 
-(s/def ::queue ::us/string)
+(s/def ::queue (s/or :str ::us/string :kwd ::us/keyword))
 (s/def ::parallelism ::us/integer)
 (s/def ::batch-size ::us/integer)
 (s/def ::tasks (s/map-of string? fn?))
@@ -91,11 +92,11 @@
 
 (defmethod ig/prep-key ::worker
   [_ cfg]
-  (merge {:batch-size 2
-          :name "worker"
-          :poll-interval (dt/duration {:seconds 5})
-          :queue "default"}
-         cfg))
+  (d/merge {:batch-size 2
+            :name "worker"
+            :poll-interval (dt/duration {:seconds 5})
+            :queue "default"}
+           (d/without-nils cfg)))
 
 (defmethod ig/init-key ::worker
   [_ {:keys [pool poll-interval name queue] :as cfg}]
@@ -158,7 +159,7 @@
 (s/def ::task  (s/or :str ::us/string :kwd ::us/keyword))
 (s/def ::delay (s/or :int ::us/integer
                      :duration dt/duration?))
-(s/def ::queue ::task)
+(s/def ::queue (s/or :str ::us/string :kwd ::us/keyword))
 (s/def ::conn some?)
 (s/def ::priority ::us/integer)
 (s/def ::max-retries ::us/integer)

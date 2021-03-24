@@ -198,9 +198,10 @@
     {:name "worker"}
 
     :app.worker/worker
-    {:executor   (ig/ref :app.worker/executor)
-     :pool       (ig/ref :app.db/pool)
-     :tasks      (ig/ref :app.tasks/registry)}
+    {:executor (ig/ref :app.worker/executor)
+     :metrics  (ig/ref :app.metrics/metrics)
+     :pool     (ig/ref :app.db/pool)
+     :tasks    (ig/ref :app.tasks/registry)}
 
     :app.worker/scheduler
     {:executor   (ig/ref :app.worker/executor)
