@@ -21,9 +21,9 @@
    [app.rpc.queries.profile :as profile]
    [app.setup.initial-data :as sid]
    [app.storage :as sto]
-   [app.tasks :as tasks]
    [app.util.services :as sv]
    [app.util.time :as dt]
+   [app.worker :as wrk]
    [buddy.hashers :as hashers]
    [clojure.spec.alpha :as s]
    [cuerdas.core :as str]))
@@ -579,9 +579,10 @@
     (check-can-delete-profile! conn profile-id)
 
     ;; Schedule a complete deletion of profile
-    (tasks/submit! conn {:name "delete-profile"
-                         :delay cfg/deletion-delay
-                         :props {:profile-id profile-id}})
+    (wrk/submit! {::wrk/task :delete-profile
+                  ::wrk/dalay cfg/deletion-delay
+                  ::wrk/conn conn
+                  :profile-id profile-id})
 
     (db/update! conn :profile
                 {:deleted-at (dt/now)}

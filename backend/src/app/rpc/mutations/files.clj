@@ -19,7 +19,7 @@
    [app.rpc.permissions :as perms]
    [app.rpc.queries.files :as files]
    [app.rpc.queries.projects :as proj]
-   [app.tasks :as tasks]
+   [app.worker :as wrk]
    [app.util.blob :as blob]
    [app.util.services :as sv]
    [app.util.time :as dt]
@@ -126,9 +126,11 @@
     (files/check-edition-permissions! conn profile-id id)
 
     ;; Schedule object deletion
-    (tasks/submit! conn {:name "delete-object"
-                         :delay cfg/deletion-delay
-                         :props {:id id :type :file}})
+    (wrk/submit! {::wrk/task :delete-object
+                  ::wrk/delay cfg/deletion-delay
+                  ::wrk/conn conn
+                  :id id
+                  :type :file})
 
     (mark-file-deleted conn params)))
 

@@ -22,7 +22,7 @@
    [app.rpc.queries.profile :as profile]
    [app.rpc.queries.teams :as teams]
    [app.storage :as sto]
-   [app.tasks :as tasks]
+   [app.worker :as wrk]
    [app.util.services :as sv]
    [app.util.time :as dt]
    [clojure.spec.alpha :as s]
@@ -139,9 +139,11 @@
                   :code :only-owner-can-delete-team))
 
       ;; Schedule object deletion
-      (tasks/submit! conn {:name "delete-object"
-                           :delay cfg/deletion-delay
-                           :props {:id id :type :team}})
+      (wrk/submit! {::wrk/task :delete-object
+                    ::wrk/delay cfg/deletion-delay
+                    ::wrk/conn conn
+                    :id id
+                    :type :team})
 
       (db/update! conn :team
                   {:deleted-at (dt/now)}

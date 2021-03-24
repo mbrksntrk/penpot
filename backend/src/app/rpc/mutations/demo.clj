@@ -16,7 +16,8 @@
    [app.db :as db]
    [app.rpc.mutations.profile :as profile]
    [app.setup.initial-data :as sid]
-   [app.tasks :as tasks]
+   [app.worker :as wrk]
+   ;; [app.tasks :as tasks]
    [app.util.services :as sv]
    [buddy.core.codecs :as bc]
    [buddy.core.nonce :as bn]
@@ -51,9 +52,10 @@
            (sid/load-initial-project! conn))
 
       ;; Schedule deletion of the demo profile
-      (tasks/submit! conn {:name "delete-profile"
-                           :delay cfg/deletion-delay
-                           :props {:profile-id id}})
+      (wrk/submit! {::wrk/task :delete-profile
+                    ::wrk/delay cfg/deletion-delay
+                    ::wrk/conn conn
+                    :profile-id id})
 
       {:email email
        :password password})))

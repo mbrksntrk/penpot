@@ -14,7 +14,8 @@
    [app.config :as cfg]
    [app.db :as db]
    [app.db.sql :as sql]
-   [app.tasks :as tasks]
+   [app.worker :as wrk]
+   ;; [app.tasks :as tasks]
    [app.util.emails :as emails]
    [clojure.spec.alpha :as s]))
 
@@ -37,12 +38,12 @@
   (us/verify fn? email-factory)
   (us/verify map? context)
   (let [email (email-factory context)]
-    (tasks/submit! conn {:name "sendmail"
-                         :delay 0
-                         :max-retries 1
-                         :priority 200
-                         :props email})))
-
+    (wrk/submit! (assoc email
+                        ::wrk/task :sendmail
+                        ::wrk/delay 0
+                        ::wrk/max-retries 1
+                        ::wrk/priority 200
+                        ::wrk/conn conn))))
 
 (def sql:profile-complaint-report
   "select (select count(*)

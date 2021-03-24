@@ -70,6 +70,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (declare event-loop-fn)
+(declare instrument-tasks)
 
 (s/def ::queue ::us/string)
 (s/def ::parallelism ::us/integer)
@@ -79,6 +80,7 @@
 
 (defmethod ig/pre-init-spec ::worker [_]
   (s/keys :req-un [::executor
+                   ::mtx/metrics
                    ::db/pool
                    ::batch-size
                    ::name
@@ -97,20 +99,20 @@
 (defmethod ig/init-key ::worker
   [_ {:keys [pool poll-interval name queue] :as cfg}]
   (log/infof "starting worker '%s' on queue '%s'" name queue)
-  (let [cch     (a/chan 1)
-        poll-ms (inst-ms poll-interval)]
+  (let [close-ch (a/chan 1)
+        poll-ms  (inst-ms poll-interval)]
     (a/go-loop []
-      (let [[val port] (a/alts! [cch (event-loop-fn cfg)] :priority true)]
+      (let [[val port] (a/alts! [close-ch (event-loop-fn cfg)] :priority true)]
         (cond
           ;; Terminate the loop if close channel is closed or
           ;; event-loop-fn returns nil.
-          (or (= port cch) (nil? val))
+          (or (= port close-ch) (nil? val))
           (log/infof "stop condition found; shutdown worker: '%s'" name)
 
           (db/pool-closed? pool)
           (do
             (log/info "worker eventloop is aborted because pool is closed")
-            (a/close! cch))
+            (a/close! close-ch))
 
           (and (instance? java.sql.SQLException val)
                (contains? #{"08003" "08006" "08001" "08004"} (.getSQLState ^java.sql.SQLException val)))
@@ -143,12 +145,95 @@
     (reify
       java.lang.AutoCloseable
       (close [_]
-        (a/close! cch)))))
+        (a/close! close-ch)))))
 
 
 (defmethod ig/halt-key! ::worker
   [_ instance]
   (.close ^java.lang.AutoCloseable instance))
+
+;; --- INSTRUMENTATION
+
+(defn- instrument!
+  [registry]
+  (mtx/instrument-vars!
+   [#'submit-task]
+   {:registry registry
+    :type :counter
+    :labels ["name"]
+    :name "tasks_submit_total"
+    :help "A counter of task submissions."
+    :wrap (fn [rootf mobj]
+            (let [mdata (meta rootf)
+                  origf (::original mdata rootf)]
+              (with-meta
+                (fn [conn params]
+                  (let [tname (:name params)]
+                    (mobj :inc [tname])
+                    (origf conn params)))
+                {::original origf})))})
+
+  (mtx/instrument-vars!
+   [#'app.worker/run-task]
+   {:registry registry
+    :type :summary
+    :quantiles []
+    :name "tasks_checkout_timing"
+    :help "Latency measured between scheduld_at and execution time."
+    :wrap (fn [rootf mobj]
+            (let [mdata (meta rootf)
+                  origf (::original mdata rootf)]
+              (with-meta
+                (fn [tasks item]
+                  (let [now (inst-ms (dt/now))
+                        sat (inst-ms (:scheduled-at item))]
+                    (mobj :observe (- now sat))
+                    (origf tasks item)))
+                {::original origf})))}))
+
+;; --- SUBMIT
+
+(s/def ::task  (s/or :str ::us/string :kwd ::us/keyword))
+(s/def ::delay (s/or :int ::us/integer
+                     :duration dt/duration?))
+(s/def ::queue ::task)
+(s/def ::conn some?)
+(s/def ::priority ::us/integer)
+(s/def ::max-retries ::us/integer)
+
+(s/def ::submit-options
+  (s/keys :req [::task ::conn]
+          :opt [::delay ::queue ::priority ::max-retries]))
+
+(def ^:private sql:insert-new-task
+  "insert into task (id, name, props, queue, priority, max_retries, scheduled_at)
+   values (?, ?, ?, ?, ?, ?, clock_timestamp() + ?)
+   returning id")
+
+(defn- extract-props
+  [options]
+  (persistent!
+   (reduce-kv (fn [res k v]
+                (cond-> res
+                  (not (qualified-keyword? k))
+                  (assoc! k v)))
+              (transient {})
+              options)))
+
+(defn submit!
+  [{:keys [::task ::delay ::queue ::priority ::max-retries ::conn]
+    :or {delay 0 queue :default priority 100 max-retries 3}
+    :as options}]
+  (us/verify ::submit-options options)
+  (let [duration  (dt/duration delay)
+        interval  (db/interval duration)
+        props     (-> options extract-props db/tjson)
+        id        (uuid/next)]
+    (log/debugf "submit task '%s' to be executed in '%s'" (name task) (str duration))
+    (db/exec-one! conn [sql:insert-new-task id (name task) props (name queue) priority max-retries interval])
+    id))
+
+;; --- RUNNER
 
 
 (def ^:private
