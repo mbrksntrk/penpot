@@ -5,7 +5,7 @@
 ;; This Source Code Form is "Incompatible With Secondary Licenses", as
 ;; defined by the Mozilla Public License, v. 2.0.
 ;;
-;; Copyright (c) 2021 UXBOX Labs SL
+;; Copyright (c) UXBOX Labs SL
 
 (ns app.cli.manage
   "A manage cli api."
@@ -26,7 +26,7 @@
 
 (defn init-system
   []
-  (let [data (-> (main/build-system-config cfg/config)
+  (let [data (-> main/system-config
                  (select-keys [:app.db/pool :app.metrics/metrics])
                  (assoc :app.migrations/all {}))]
     (-> data ig/prep ig/init)))

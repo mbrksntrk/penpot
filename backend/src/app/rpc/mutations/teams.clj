@@ -15,7 +15,7 @@
    [app.common.uuid :as uuid]
    [app.config :as cfg]
    [app.db :as db]
-   [app.emails :as emails]
+   [app.emails :as eml]
    [app.media :as media]
    [app.rpc.mutations.projects :as projects]
    [app.rpc.permissions :as perms]
@@ -323,27 +323,29 @@
                   :code :insufficient-permissions))
 
       ;; First check if the current profile is allowed to send emails.
-      (when-not (emails/allow-send-emails? conn profile)
+      (when-not (eml/allow-send-emails? conn profile)
         (ex/raise :type :validation
                   :code :profile-is-muted
                   :hint "looks like the profile has reported repeatedly as spam or has permanent bounces"))
 
-      (when (and member (not (emails/allow-send-emails? conn member)))
+      (when (and member (not (eml/allow-send-emails? conn member)))
         (ex/raise :type :validation
                   :code :member-is-muted
                   :hint "looks like the profile has reported repeatedly as spam or has permanent bounces"))
 
       ;; Secondly check if the invited member email is part of the
       ;; global spam/bounce report.
-      (when (emails/has-bounce-reports? conn email)
+      (when (eml/has-bounce-reports? conn email)
         (ex/raise :type :validation
                   :code :email-has-permanent-bounces
                   :hint "looks like the email you invite has been repeatedly reported as spam or permanent bounce"))
 
-      (emails/send! conn emails/invite-to-team
-                    {:to email
-                     :invited-by (:fullname profile)
-                     :team (:name team)
-                     :token itoken
-                     :extra-data ptoken})
+      (eml/send! {::eml/conn conn
+                  ::eml/factory eml/invite-to-team
+                  :public-uri (:public-uri cfg)
+                  :to email
+                  :invited-by (:fullname profile)
+                  :team (:name team)
+                  :token itoken
+                  :extra-data ptoken})
       nil)))

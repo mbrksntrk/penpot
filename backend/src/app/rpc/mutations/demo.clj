@@ -40,7 +40,7 @@
                   :password password
                   :props {:onboarding-viewed true}}]
 
-    (when-not (:allow-demo-users cfg/config)
+    (when-not (cfg/get :allow-demo-users)
       (ex/raise :type :validation
                 :code :demo-users-not-allowed
                 :hint "Demo users are disabled by config."))

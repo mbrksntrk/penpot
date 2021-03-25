@@ -233,7 +233,7 @@
 
 (defn run
   [{:keys [preset] :or {preset :small}}]
-  (let [config (select-keys (main/build-system-config cfg/config)
+  (let [config (select-keys main/system-config
                             [:app.db/pool
                              :app.telemetry/migrations
                              :app.migrations/migrations
